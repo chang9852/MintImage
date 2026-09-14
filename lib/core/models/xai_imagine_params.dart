@@ -204,10 +204,20 @@ bool isXaiImagineModelId(String model) {
   return model.trim().toLowerCase().startsWith('grok');
 }
 
+/// 界面中可供选择的 Grok 质量档位。
+///
+/// Grok 只接受 `low` 与 `medium`，因此不提供「高」。
+const List<ImageQuality> xaiImagineQualityOptions = <ImageQuality>[
+  ImageQuality.auto,
+  ImageQuality.low,
+  ImageQuality.medium,
+];
+
 /// 计算最终下发到接口的 `quality` 取值，返回 null 表示不下发该字段。
 ///
-/// Grok 系列只接受 `low` 与 `medium`：应用里的「自动」与「高」都是非法值，
-/// 会让请求被上游直接拒绝；且该参数仅 2.0 支持，更早的型号一律不下发。
+/// Grok 系列只接受 `low` 与 `medium`：应用里的「自动」与「高」都不是合法取值，
+/// 因此自动回落到 `medium`（界面也不提供「高」）。
+/// 该参数仅 2.0 支持，更早的型号一律不下发。
 /// 其余模型沿用应用内的三档取值。
 String? resolveImageQualityValue({
   required String model,
@@ -221,15 +231,6 @@ String? resolveImageQualityValue({
   }
   return xaiImagineQualityValue(quality);
 }
-
-/// 界面中可供选择的 Grok Imagine 质量档位。
-///
-/// 排除 `high`：xAI 没有对应档位，避免给出无法兑现的选项。
-const List<ImageQuality> xaiImagineQualityOptions = <ImageQuality>[
-  ImageQuality.auto,
-  ImageQuality.low,
-  ImageQuality.medium,
-];
 
 double _ratioValue(String aspectRatio) {
   final parts = aspectRatio.split(':');

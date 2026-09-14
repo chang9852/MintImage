@@ -239,11 +239,13 @@ void main() {
         expect(body['prompt'], 'a red apple');
         expect(body['n'], 1);
         expect(body['size'], '1536x1024');
-        // 中转站不认识 xAI 原生参数，也不接受质量与输出格式。
+        expect(body['response_format'], 'url');
+        // Grok 只接受 low/medium（自动档回落 medium），也不接受输出格式；
+        // xAI 原生的 aspect_ratio 与 resolution 只用于直连官方端点。
+        expect(body['quality'], 'medium');
+        expect(body.containsKey('output_format'), isFalse);
         expect(body.containsKey('aspect_ratio'), isFalse);
         expect(body.containsKey('resolution'), isFalse);
-        expect(body.containsKey('quality'), isFalse);
-        expect(body.containsKey('output_format'), isFalse);
 
         request.response.headers.contentType = ContentType.json;
         request.response.write(
@@ -270,7 +272,7 @@ void main() {
   });
 
   group('ImageEditApi (Grok Imagine 经中转站)', () {
-    test('改用 multipart 表单上传参考图，不发质量与输出格式', () async {
+    test('改用 multipart 表单上传参考图，不下发输出格式', () async {
       final directory = await Directory.systemTemp.createTemp('mint_xai');
       addTearDown(() => directory.delete(recursive: true));
       final imageFile = File('${directory.path}/input.png');
@@ -295,8 +297,11 @@ void main() {
         expect(payload, contains('name="image[]"'));
         expect(payload, contains('name="size"'));
         expect(payload, contains('1024x1024'));
-        // 中转站上的 Grok 模型不接受质量与输出格式。
-        expect(payload, isNot(contains('name="quality"')));
+        expect(payload, contains('name="response_format"'));
+        expect(payload, contains('url'));
+        expect(payload, contains('name="quality"'));
+        expect(payload, contains('medium'));
+        // Grok 不接受输出格式。
         expect(payload, isNot(contains('name="output_format"')));
 
         request.response.headers.contentType = ContentType.json;
@@ -322,8 +327,8 @@ void main() {
     });
   });
 
-  group('Grok 模型走 OpenAI 兼容协议时的质量与格式字段', () {
-    test('自动质量映射为 medium，且不下发输出格式与 response_format', () async {
+  group('Grok 模型走 OpenAI 兼容协议时的请求体', () {
+    test('下发 size、response_format 与合法的 quality', () async {
       final body = await _captureGenerateBody(
         request: _request(quality: ImageQuality.auto),
         model: 'grok-imagine-image-2.0',
@@ -332,26 +337,37 @@ void main() {
       );
 
       expect(body['model'], 'grok-imagine-image-2.0');
-      expect(body['quality'], 'medium');
+      expect(body['n'], 1);
       expect(body['size'], '1024x1024');
+      expect(body['response_format'], 'url');
+      // 自动档回落到 Grok 唯一合法的 medium，而不是非法的 auto。
+      expect(body['quality'], 'medium');
       expect(body.containsKey('output_format'), isFalse);
-      expect(body.containsKey('response_format'), isFalse);
     });
 
-    test('高清档回落到 medium，低档透传 low', () async {
-      final high = await _captureGenerateBody(
+    test('任意档位都只下发 low 或 medium', () async {
+      for (final quality in ImageQuality.values) {
+        final body = await _captureGenerateBody(
+          request: _request(quality: quality),
+          model: 'grok-imagine-image-2.0',
+          apiMode: ImageGenerationApiMode.images,
+        );
+        expect(body['quality'], anyOf('low', 'medium'), reason: quality.name);
+      }
+    });
+
+    test('Grok 模式下同样下发合法取值', () async {
+      final body = await _captureGenerateBody(
         request: _request(quality: ImageQuality.high),
         model: 'grok-imagine-image-2.0',
-        apiMode: ImageGenerationApiMode.images,
+        apiMode: ImageGenerationApiMode.xaiImagine,
       );
-      expect(high['quality'], 'medium');
 
-      final low = await _captureGenerateBody(
-        request: _request(quality: ImageQuality.low),
-        model: 'grok-imagine-image-2.0',
-        apiMode: ImageGenerationApiMode.images,
-      );
-      expect(low['quality'], 'low');
+      expect(body['size'], '1024x1024');
+      expect(body['response_format'], 'url');
+      expect(body['quality'], 'medium');
+      // 只有直连 api.x.ai 才使用 xAI 原生参数。
+      expect(body.containsKey('aspect_ratio'), isFalse);
     });
 
     test('2.0 之前的 Grok 型号不下发 quality', () async {
@@ -362,6 +378,7 @@ void main() {
       );
 
       expect(body.containsKey('quality'), isFalse);
+      expect(body['response_format'], 'url');
     });
 
     test('非 Grok 模型仍按原样发送质量与输出格式', () async {

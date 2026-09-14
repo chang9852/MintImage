@@ -115,10 +115,6 @@ void main() {
       expect(xaiImagineQualityValue(ImageQuality.medium), 'medium');
       expect(xaiImagineQualityValue(ImageQuality.high), 'medium');
     });
-
-    test('可供选择的档位不包含高清', () {
-      expect(xaiImagineQualityOptions, isNot(contains(ImageQuality.high)));
-    });
   });
 
   group('xaiImagineSupportsQuality', () {
@@ -164,7 +160,8 @@ void main() {
       );
     });
 
-    test('Grok 2.0 把自动与高清回落到 medium', () {
+    test('Grok 2.0 只下发 low 或 medium', () {
+      // 自动与高清都不是 Grok 的合法取值，统一回落到 medium。
       for (final quality in const [
         ImageQuality.auto,
         ImageQuality.medium,
@@ -194,14 +191,15 @@ void main() {
         'grok-imagine-image-lite',
       ]) {
         expect(
-          resolveImageQualityValue(
-            model: model,
-            quality: ImageQuality.medium,
-          ),
+          resolveImageQualityValue(model: model, quality: ImageQuality.medium),
           isNull,
           reason: model,
         );
       }
+    });
+
+    test('可选档位不包含 Grok 不支持的高清', () {
+      expect(xaiImagineQualityOptions, isNot(contains(ImageQuality.high)));
     });
   });
 }

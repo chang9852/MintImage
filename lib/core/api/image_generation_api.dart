@@ -83,11 +83,13 @@ class ImageGenerationApi {
     if (request.apiSize != null) {
       body['size'] = request.apiSize;
     }
-    if (responseFormat != null && responseFormat.trim().isNotEmpty) {
+    if (isXaiModel) {
+      // 与实测可用的 Grok 请求体保持一致：
+      // 只带 model / prompt / n / size / response_format。
+      body['response_format'] = xaiImagineCompatResponseFormat;
+    } else if (responseFormat != null && responseFormat.trim().isNotEmpty) {
       // GPT Image 2/2.5 and RightAPI reject the legacy response_format field.
-      if (!_isGptImage2Family(profile.model) &&
-          !_isRightApiDraw(profile) &&
-          !isXaiModel) {
+      if (!_isGptImage2Family(profile.model) && !_isRightApiDraw(profile)) {
         body['response_format'] = responseFormat;
       }
     }

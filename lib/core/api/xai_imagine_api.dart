@@ -15,6 +15,12 @@ const String xaiImagineEditsPath = '/v1/images/edits';
 /// xAI 官方图像接口的主机名。
 const String xaiImagineOfficialHost = 'api.x.ai';
 
+/// Grok 系列走 OpenAI 兼容接口时请求的响应格式。
+///
+/// 实测可用的 Grok 请求体固定携带 `response_format: url`，
+/// 即让接口返回图片地址而不是 base64。
+const String xaiImagineCompatResponseFormat = 'url';
+
 /// 单次请求最多携带的参考图数量，超出部分会被丢弃。
 ///
 /// xAI 的多图编辑最多接受 3 张参考图。

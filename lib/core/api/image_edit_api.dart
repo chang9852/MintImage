@@ -129,10 +129,12 @@ class ImageEditApi {
     if (request.apiSize != null) {
       fields.add(MapEntry('size', request.apiSize!));
     }
-    if (responseFormat != null &&
+    if (isXaiModel) {
+      // 与实测可用的 Grok 请求体保持一致。
+      fields.add(MapEntry('response_format', xaiImagineCompatResponseFormat));
+    } else if (responseFormat != null &&
         responseFormat.trim().isNotEmpty &&
-        !_isGptImage2Family(profile.model) &&
-        !isXaiModel) {
+        !_isGptImage2Family(profile.model)) {
       fields.add(MapEntry('response_format', responseFormat));
     }
     formData.fields.addAll(fields);
