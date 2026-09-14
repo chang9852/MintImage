@@ -58,6 +58,19 @@ Base URL 预填 `https://api.x.ai`、模型名预填 `grok-imagine-image-2.0`，
 它和普通的 Image 配置彼此独立，各自保存自己的模型名、地址与密钥，
 在首页底部的模型按钮里可以随时切换，切换其中一个不会影响另一个。
 
+### 直连官方与走中转站的区别
+
+该模式会按 Base URL 自动选择请求格式：
+
+| Base URL | 请求格式 | 说明 |
+| --- | --- | --- |
+| `https://api.x.ai` | xAI 原生 | 发送 `aspect_ratio` 与 `resolution`，可在预设里选 13 种宽高比 |
+| 其他（中转站 / 代理） | OpenAI 兼容 | 发送 `size`，并且不下发 `quality` 与 `output_format` |
+
+中转站（例如 New API）通常只把 Grok 图像模型暴露成 OpenAI 形状的接口，
+所以走中转站时需要**在尺寸里选一个具体值**（留在「自动」不会发送 `size`），
+模型名也要用中转站自己的命名，可点模型名输入框右侧的云朵图标获取模型列表。
+
 | 项目 | 取值 |
 | --- | --- |
 | 文生图端点 | `POST /v1/images/generations` |

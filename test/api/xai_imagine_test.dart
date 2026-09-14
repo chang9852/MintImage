@@ -206,8 +206,23 @@ void main() {
     });
   });
 
-  group('ImageGenerationApi (Grok Imagine)', () {
-    test('向 /v1/images/generations 发送宽高比与分辨率请求', () async {
+  group('isXaiImagineOfficialBaseUrl', () {
+    test('识别 xAI 官方端点', () {
+      expect(isXaiImagineOfficialBaseUrl('https://api.x.ai'), isTrue);
+      expect(isXaiImagineOfficialBaseUrl('https://api.x.ai/'), isTrue);
+      expect(isXaiImagineOfficialBaseUrl('api.x.ai'), isTrue);
+      expect(isXaiImagineOfficialBaseUrl('https://API.X.AI'), isTrue);
+    });
+
+    test('中转站等非官方地址返回 false', () {
+      expect(isXaiImagineOfficialBaseUrl('https://api.catcat.top'), isFalse);
+      expect(isXaiImagineOfficialBaseUrl('https://example.com/xai'), isFalse);
+      expect(isXaiImagineOfficialBaseUrl(''), isFalse);
+    });
+  });
+
+  group('ImageGenerationApi (Grok Imagine 经中转站)', () {
+    test('改用 OpenAI 兼容格式：发 size，不发 xAI 原生参数', () async {
       final server = await _startServer((request) async {
         expect(request.method, 'POST');
         expect(request.uri.path, '/v1/images/generations');
@@ -222,9 +237,12 @@ void main() {
 
         expect(body['model'], 'grok-imagine-image-2.0');
         expect(body['prompt'], 'a red apple');
-        expect(body['aspect_ratio'], '9:16');
-        expect(body['resolution'], '1k');
-        expect(body['response_format'], 'b64_json');
+        expect(body['n'], 1);
+        expect(body['size'], '1536x1024');
+        // 中转站不认识 xAI 原生参数，也不接受质量与输出格式。
+        expect(body.containsKey('aspect_ratio'), isFalse);
+        expect(body.containsKey('resolution'), isFalse);
+        expect(body.containsKey('quality'), isFalse);
         expect(body.containsKey('output_format'), isFalse);
 
         request.response.headers.contentType = ContentType.json;
@@ -240,11 +258,7 @@ void main() {
       addTearDown(server.close);
 
       final results = await const ImageGenerationApi().generate(
-        _request(
-          sizePreset: SizePreset.custom,
-          customWidth: 576,
-          customHeight: 1024,
-        ),
+        _request(sizePreset: SizePreset.posterLandscape),
         _profileFor(server),
         timeoutSeconds: 30,
       );
@@ -255,8 +269,8 @@ void main() {
     });
   });
 
-  group('ImageEditApi (Grok Imagine)', () {
-    test('向 /v1/images/edits 以 JSON 发送参考图', () async {
+  group('ImageEditApi (Grok Imagine 经中转站)', () {
+    test('改用 multipart 表单上传参考图，不发质量与输出格式', () async {
       final directory = await Directory.systemTemp.createTemp('mint_xai');
       addTearDown(() => directory.delete(recursive: true));
       final imageFile = File('${directory.path}/input.png');
@@ -269,19 +283,21 @@ void main() {
         expect(request.uri.path, '/v1/images/edits');
         expect(
           request.headers.contentType?.mimeType,
-          ContentType.json.mimeType,
+          contains('multipart/form-data'),
         );
 
-        final body =
-            jsonDecode(await utf8.decoder.bind(request).join())
-                as Map<String, dynamic>;
-
-        expect(body['model'], 'grok-imagine-image-2.0');
-        expect(body['aspect_ratio'], '1:1');
-        expect(body['response_format'], 'b64_json');
-        final image = body['image'] as Map<String, dynamic>;
-        expect(image['type'], 'image_url');
-        expect(image['url'], startsWith('data:image/png;base64,'));
+        final payload = utf8.decode(
+          await _collectBytes(request),
+          allowMalformed: true,
+        );
+        expect(payload, contains('name="model"'));
+        expect(payload, contains('grok-imagine-image-2.0'));
+        expect(payload, contains('name="image[]"'));
+        expect(payload, contains('name="size"'));
+        expect(payload, contains('1024x1024'));
+        // 中转站上的 Grok 模型不接受质量与输出格式。
+        expect(payload, isNot(contains('name="quality"')));
+        expect(payload, isNot(contains('name="output_format"')));
 
         request.response.headers.contentType = ContentType.json;
         request.response.write(
@@ -305,6 +321,14 @@ void main() {
       expect(results.single.fileExtension, 'jpg');
     });
   });
+}
+
+Future<List<int>> _collectBytes(HttpRequest request) async {
+  final bytes = <int>[];
+  await for (final chunk in request) {
+    bytes.addAll(chunk);
+  }
+  return bytes;
 }
 
 GenerationRequest _request({

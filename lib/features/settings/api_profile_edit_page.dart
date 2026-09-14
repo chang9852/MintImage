@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/openai_client.dart';
+import '../../core/api/xai_imagine_api.dart';
 import '../../core/models/builtin_image_models.dart';
 import '../../core/models/settings_model.dart';
 import '../../core/providers/app_providers.dart';
@@ -219,11 +220,30 @@ class _ApiProfileEditPageState extends ConsumerState<ApiProfileEditPage> {
                     else
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          'Grok Imagine 没有流式响应，该模式固定使用普通请求。',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppThemeTokens.textSecondary,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Grok Imagine 没有流式响应，该模式固定使用普通请求。',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: AppThemeTokens.textSecondary,
+                                  ),
+                            ),
+                            if (!isXaiImagineOfficialBaseUrl(
+                              _baseUrlController.text,
+                            )) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                '当前 Base URL 不是 api.x.ai，将按 OpenAI 兼容格式请求'
+                                '（如中转站通常只提供这种格式，并需要选择具体尺寸）。',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: AppThemeTokens.textSecondary,
+                                    ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     const SizedBox(height: 14),

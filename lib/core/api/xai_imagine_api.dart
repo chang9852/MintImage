@@ -12,10 +12,36 @@ const String xaiImagineGenerationsPath = '/v1/images/generations';
 /// Grok Imagine 图生图端点。
 const String xaiImagineEditsPath = '/v1/images/edits';
 
+/// xAI 官方图像接口的主机名。
+const String xaiImagineOfficialHost = 'api.x.ai';
+
 /// 单次请求最多携带的参考图数量，超出部分会被丢弃。
 ///
 /// xAI 的多图编辑最多接受 3 张参考图。
 const int xaiImagineMaxReferenceImages = 3;
+
+/// 判断配置是否直连 xAI 官方端点。
+bool isXaiImagineOfficialEndpoint(ApiProfile profile) {
+  return isXaiImagineOfficialBaseUrl(profile.normalizedBaseUrl);
+}
+
+/// 判断 Base URL 是否指向 xAI 官方端点。
+///
+/// 只有直连官方端点时才发送 xAI 原生的 `aspect_ratio` 与 `resolution`。
+/// 中转站（New API 等）把 Grok 图像模型暴露成 OpenAI 形状的接口，
+/// 既不认识这两个参数，也需要 `size`，因此对非官方地址改用
+/// OpenAI 兼容的请求体与 multipart 图生图表单。
+bool isXaiImagineOfficialBaseUrl(String baseUrl) {
+  final raw = baseUrl.trim().toLowerCase();
+  if (raw.isEmpty) {
+    return false;
+  }
+
+  // 允许只填主机名，缺少协议时按 https 补全后再解析。
+  final uri = Uri.tryParse(raw.contains('://') ? raw : 'https://$raw');
+  final host = uri?.host.toLowerCase() ?? '';
+  return host == xaiImagineOfficialHost || host.endsWith('.x.ai');
+}
 
 /// 构造 Grok Imagine 文生图请求体。
 ///

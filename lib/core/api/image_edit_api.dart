@@ -31,7 +31,9 @@ class ImageEditApi {
       requestLogService: requestLogService,
     );
 
-    if (profile.apiMode.isXaiImagine) {
+    // 只有直连 api.x.ai 才走 xAI 原生的 JSON 图生图；
+    // 指向中转站时继续走下面的 OpenAI 兼容 multipart 表单。
+    if (profile.apiMode.isXaiImagine && isXaiImagineOfficialEndpoint(profile)) {
       // Grok Imagine 的图生图走 JSON 接口并以 data URL 传参考图，
       // 不使用 OpenAI 的 multipart 表单，也没有流式响应。
       final referenceDataUrls = <String>[
@@ -108,12 +110,16 @@ class ImageEditApi {
 
     final formData = FormData();
 
+    // 中转站上的 Grok 模型不接受质量与输出格式这两个 OpenAI 字段，
+    // 这里不下发，避免透传给上游后被判定为非法参数。
+    final isXaiRelay = profile.apiMode.isXaiImagine;
     final fields = <MapEntry<String, String>>[
       MapEntry('model', profile.model),
       MapEntry('prompt', request.prompt),
       MapEntry('n', '1'),
-      MapEntry('quality', request.quality.apiValue),
-      MapEntry('output_format', request.outputFormat.apiValue),
+      if (!isXaiRelay) MapEntry('quality', request.quality.apiValue),
+      if (!isXaiRelay)
+        MapEntry('output_format', request.outputFormat.apiValue),
     ];
     if (request.apiSize != null) {
       fields.add(MapEntry('size', request.apiSize!));
@@ -146,7 +152,11 @@ class ImageEditApi {
             cancelToken: cancelToken,
           );
 
-    return _parseResults(response);
+    // 中转站返回的仍是 OpenAI Images 结构，复用 xAI 的解析器
+    // 以便顺带按图片头字节推断真实格式。
+    return isXaiRelay
+        ? parseXaiImagineResults(response)
+        : _parseResults(response);
   }
 
   bool _isGptImage2Family(String model) {

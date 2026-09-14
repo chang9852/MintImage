@@ -26,8 +26,10 @@ class ImageGenerationApi {
       requestLogService: requestLogService,
     );
 
-    if (profile.apiMode.isXaiImagine) {
-      // Grok Imagine 接受宽高比加分辨率，不接受像素尺寸、质量与输出格式，
+    // Grok Imagine 直连 api.x.ai 时使用 xAI 原生参数；
+    // 指向中转站时继续走下面的 OpenAI 兼容请求体。
+    if (profile.apiMode.isXaiImagine && isXaiImagineOfficialEndpoint(profile)) {
+      // xAI 接受宽高比加分辨率，不接受像素尺寸、质量与输出格式，
       // 也没有流式响应，因此这里单独构造请求体。
       final body = buildXaiImagineGenerateBody(
         request: request,
@@ -62,12 +64,15 @@ class ImageGenerationApi {
       return parseResponsesImageResults(response);
     }
 
+    // 中转站上的 Grok 模型不接受质量与输出格式这两个 OpenAI 字段，
+    // 这里不下发，避免透传给上游后被判定为非法参数。
+    final isXaiRelay = profile.apiMode.isXaiImagine;
     final body = <String, dynamic>{
       'model': profile.model,
       'prompt': request.prompt,
       'n': 1,
-      'quality': request.quality.apiValue,
-      'output_format': request.outputFormat.apiValue,
+      if (!isXaiRelay) 'quality': request.quality.apiValue,
+      if (!isXaiRelay) 'output_format': request.outputFormat.apiValue,
     };
     if (request.apiSize != null) {
       body['size'] = request.apiSize;
@@ -109,7 +114,11 @@ class ImageGenerationApi {
             cancelToken: cancelToken,
           );
 
-    return _parseResults(response);
+    // 中转站返回的仍是 OpenAI Images 结构，复用 xAI 的解析器
+    // 以便顺带按图片头字节推断真实格式。
+    return isXaiRelay
+        ? parseXaiImagineResults(response)
+        : _parseResults(response);
   }
 
   bool _isRightApiDraw(ApiProfile profile) {
