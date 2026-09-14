@@ -321,6 +321,101 @@ void main() {
       expect(results.single.fileExtension, 'jpg');
     });
   });
+
+  group('Grok 模型走 OpenAI 兼容协议时的质量与格式字段', () {
+    test('自动质量映射为 medium，且不下发输出格式与 response_format', () async {
+      final body = await _captureGenerateBody(
+        request: _request(quality: ImageQuality.auto),
+        model: 'grok-imagine-image-2.0',
+        apiMode: ImageGenerationApiMode.images,
+        responseFormat: 'url',
+      );
+
+      expect(body['model'], 'grok-imagine-image-2.0');
+      expect(body['quality'], 'medium');
+      expect(body['size'], '1024x1024');
+      expect(body.containsKey('output_format'), isFalse);
+      expect(body.containsKey('response_format'), isFalse);
+    });
+
+    test('高清档回落到 medium，低档透传 low', () async {
+      final high = await _captureGenerateBody(
+        request: _request(quality: ImageQuality.high),
+        model: 'grok-imagine-image-2.0',
+        apiMode: ImageGenerationApiMode.images,
+      );
+      expect(high['quality'], 'medium');
+
+      final low = await _captureGenerateBody(
+        request: _request(quality: ImageQuality.low),
+        model: 'grok-imagine-image-2.0',
+        apiMode: ImageGenerationApiMode.images,
+      );
+      expect(low['quality'], 'low');
+    });
+
+    test('2.0 之前的 Grok 型号不下发 quality', () async {
+      final body = await _captureGenerateBody(
+        request: _request(quality: ImageQuality.medium),
+        model: 'grok-imagine-image-lite',
+        apiMode: ImageGenerationApiMode.images,
+      );
+
+      expect(body.containsKey('quality'), isFalse);
+    });
+
+    test('非 Grok 模型仍按原样发送质量与输出格式', () async {
+      final body = await _captureGenerateBody(
+        request: _request(quality: ImageQuality.high),
+        model: 'gpt-image-2.5-flare',
+        apiMode: ImageGenerationApiMode.images,
+      );
+
+      expect(body['quality'], 'high');
+      expect(body['output_format'], 'png');
+    });
+  });
+}
+
+/// 用给定的请求与配置发起一次生图，并返回服务端实际收到的请求体。
+Future<Map<String, dynamic>> _captureGenerateBody({
+  required GenerationRequest request,
+  required String model,
+  required ImageGenerationApiMode apiMode,
+  String? responseFormat,
+}) async {
+  Map<String, dynamic>? captured;
+  final server = await _startServer((httpRequest) async {
+    captured =
+        jsonDecode(await utf8.decoder.bind(httpRequest).join())
+            as Map<String, dynamic>;
+    httpRequest.response.headers.contentType = ContentType.json;
+    httpRequest.response.write(
+      jsonEncode({
+        'data': [
+          {'b64_json': _pngBase64},
+        ],
+      }),
+    );
+    await httpRequest.response.close();
+  });
+
+  try {
+    await const ImageGenerationApi().generate(
+      request,
+      _profileFor(server, model: model, apiMode: apiMode),
+      responseFormat: responseFormat,
+      timeoutSeconds: 30,
+    );
+  } finally {
+    await server.close();
+  }
+
+  final body = captured;
+  if (body == null) {
+    throw StateError('测试服务端没有收到请求。');
+  }
+  return body;
 }
 
 Future<List<int>> _collectBytes(HttpRequest request) async {
@@ -373,13 +468,17 @@ Future<HttpServer> _startServer(
   return server;
 }
 
-ApiProfile _profileFor(HttpServer server) {
+ApiProfile _profileFor(
+  HttpServer server, {
+  String model = 'grok-imagine-image-2.0',
+  ImageGenerationApiMode apiMode = ImageGenerationApiMode.xaiImagine,
+}) {
   return ApiProfile(
     id: 'default',
     name: 'Grok',
     baseUrl: 'http://${server.address.host}:${server.port}',
     apiKey: 'test-key',
-    model: 'grok-imagine-image-2.0',
-    apiMode: ImageGenerationApiMode.xaiImagine,
+    model: model,
+    apiMode: apiMode,
   );
 }

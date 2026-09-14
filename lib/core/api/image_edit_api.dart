@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import '../models/generation_request.dart';
 import '../models/generation_result.dart';
 import '../models/settings_model.dart';
+import '../models/xai_imagine_params.dart';
 import '../services/request_log_service.dart';
 import 'openai_client.dart';
 import 'responses_image_api.dart';
@@ -110,23 +111,28 @@ class ImageEditApi {
 
     final formData = FormData();
 
-    // 中转站上的 Grok 模型不接受质量与输出格式这两个 OpenAI 字段，
-    // 这里不下发，避免透传给上游后被判定为非法参数。
+    // Grok 系列只接受 low/medium（且仅 2.0 支持该参数），也不接受输出格式，
+    // 因此这两个字段按模型能力决定是否下发，避免被上游判定为非法参数。
     final isXaiRelay = profile.apiMode.isXaiImagine;
+    final isXaiModel = isXaiImagineModelId(profile.model);
+    final quality = resolveImageQualityValue(
+      model: profile.model,
+      quality: request.quality,
+    );
     final fields = <MapEntry<String, String>>[
       MapEntry('model', profile.model),
       MapEntry('prompt', request.prompt),
       MapEntry('n', '1'),
-      if (!isXaiRelay) MapEntry('quality', request.quality.apiValue),
-      if (!isXaiRelay)
-        MapEntry('output_format', request.outputFormat.apiValue),
+      if (quality != null) MapEntry('quality', quality),
+      if (!isXaiModel) MapEntry('output_format', request.outputFormat.apiValue),
     ];
     if (request.apiSize != null) {
       fields.add(MapEntry('size', request.apiSize!));
     }
     if (responseFormat != null &&
         responseFormat.trim().isNotEmpty &&
-        !_isGptImage2Family(profile.model)) {
+        !_isGptImage2Family(profile.model) &&
+        !isXaiModel) {
       fields.add(MapEntry('response_format', responseFormat));
     }
     formData.fields.addAll(fields);
@@ -152,9 +158,8 @@ class ImageEditApi {
             cancelToken: cancelToken,
           );
 
-    // 中转站返回的仍是 OpenAI Images 结构，复用 xAI 的解析器
-    // 以便顺带按图片头字节推断真实格式。
-    return isXaiRelay
+    // Grok 系列不下发输出格式，落盘扩展名改由响应头字节推断。
+    return (isXaiRelay || isXaiModel)
         ? parseXaiImagineResults(response)
         : _parseResults(response);
   }

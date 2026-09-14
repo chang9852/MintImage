@@ -234,8 +234,10 @@ class BottomInputBarState extends ConsumerState<BottomInputBar> {
     final activeProfile = settings.activeProfile;
     // Grok Imagine 只接受宽高比加分辨率，且没有输出格式与高清档。
     final xaiImagine = activeProfile.apiMode.isXaiImagine;
+    // Grok 模型无论走哪种生图协议，都只有低/中两档质量，也不接受输出格式。
+    final limitedGrok = xaiImagine || isXaiImagineModelId(activeProfile.model);
     final effectiveQuality =
-        xaiImagine && !xaiImagineQualityOptions.contains(_quality)
+        limitedGrok && !xaiImagineQualityOptions.contains(_quality)
         ? ImageQuality.auto
         : _quality;
     final hasApiKey = activeProfile.apiKey.trim().isNotEmpty;
@@ -432,7 +434,7 @@ class BottomInputBarState extends ConsumerState<BottomInputBar> {
                                   const SizedBox(width: 6),
                                   QualitySelector(
                                     selectedQuality: effectiveQuality,
-                                    qualities: xaiImagine
+                                    qualities: limitedGrok
                                         ? xaiImagineQualityOptions
                                         : ImageQuality.values,
                                     onSelected: (quality) {
@@ -442,8 +444,8 @@ class BottomInputBarState extends ConsumerState<BottomInputBar> {
                                       _persistLastGenerationOptions();
                                     },
                                   ),
-                                  // Grok Imagine 不能指定输出格式，隐藏该选项。
-                                  if (!xaiImagine) ...[
+                                  // Grok 模型不能指定输出格式，隐藏该选项。
+                                  if (!limitedGrok) ...[
                                     const SizedBox(width: 6),
                                     ImageFormatSelector(
                                       selectedFormat: _outputFormat,

@@ -131,4 +131,77 @@ void main() {
       expect(xaiImagineSupportsQuality('grok-imagine-image-quality'), isFalse);
     });
   });
+
+  group('isXaiImagineModelId', () {
+    test('识别 Grok 系列模型', () {
+      expect(isXaiImagineModelId('grok-imagine-image-2.0'), isTrue);
+      expect(isXaiImagineModelId('grok-imagine-image-lite'), isTrue);
+      expect(isXaiImagineModelId(' Grok-Imagine-Image '), isTrue);
+    });
+
+    test('其他模型返回 false', () {
+      expect(isXaiImagineModelId('gpt-image-2'), isFalse);
+      expect(isXaiImagineModelId('gpt-image-2.5-sunburst'), isFalse);
+      expect(isXaiImagineModelId(''), isFalse);
+    });
+  });
+
+  group('resolveImageQualityValue', () {
+    test('非 Grok 模型沿用应用内的三档取值', () {
+      expect(
+        resolveImageQualityValue(
+          model: 'gpt-image-2',
+          quality: ImageQuality.auto,
+        ),
+        'auto',
+      );
+      expect(
+        resolveImageQualityValue(
+          model: 'gpt-image-2',
+          quality: ImageQuality.high,
+        ),
+        'high',
+      );
+    });
+
+    test('Grok 2.0 把自动与高清回落到 medium', () {
+      for (final quality in const [
+        ImageQuality.auto,
+        ImageQuality.medium,
+        ImageQuality.high,
+      ]) {
+        expect(
+          resolveImageQualityValue(
+            model: 'grok-imagine-image-2.0',
+            quality: quality,
+          ),
+          'medium',
+          reason: quality.name,
+        );
+      }
+      expect(
+        resolveImageQualityValue(
+          model: 'grok-imagine-image-2.0',
+          quality: ImageQuality.low,
+        ),
+        'low',
+      );
+    });
+
+    test('2.0 之前的 Grok 型号不下发 quality', () {
+      for (final model in const [
+        'grok-imagine-image',
+        'grok-imagine-image-lite',
+      ]) {
+        expect(
+          resolveImageQualityValue(
+            model: model,
+            quality: ImageQuality.medium,
+          ),
+          isNull,
+          reason: model,
+        );
+      }
+    });
+  });
 }

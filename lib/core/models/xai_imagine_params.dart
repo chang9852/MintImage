@@ -196,6 +196,32 @@ bool xaiImagineSupportsQuality(String model) {
   return model.trim().toLowerCase().contains('2.0');
 }
 
+/// 判断模型名是否属于 xAI Grok 图像模型。
+///
+/// 模型名以 `grok` 开头即视为 Grok 系列，这样后续新增
+/// `grok-imagine-*` 型号时无需再改判断逻辑。
+bool isXaiImagineModelId(String model) {
+  return model.trim().toLowerCase().startsWith('grok');
+}
+
+/// 计算最终下发到接口的 `quality` 取值，返回 null 表示不下发该字段。
+///
+/// Grok 系列只接受 `low` 与 `medium`：应用里的「自动」与「高」都是非法值，
+/// 会让请求被上游直接拒绝；且该参数仅 2.0 支持，更早的型号一律不下发。
+/// 其余模型沿用应用内的三档取值。
+String? resolveImageQualityValue({
+  required String model,
+  required ImageQuality quality,
+}) {
+  if (!isXaiImagineModelId(model)) {
+    return quality.apiValue;
+  }
+  if (!xaiImagineSupportsQuality(model)) {
+    return null;
+  }
+  return xaiImagineQualityValue(quality);
+}
+
 /// 界面中可供选择的 Grok Imagine 质量档位。
 ///
 /// 排除 `high`：xAI 没有对应档位，避免给出无法兑现的选项。
