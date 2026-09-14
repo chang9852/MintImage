@@ -7,6 +7,7 @@ import '../models/settings_model.dart';
 import '../services/request_log_service.dart';
 import 'openai_client.dart';
 import 'responses_image_api.dart';
+import 'xai_imagine_api.dart';
 
 class ImageEditApi {
   const ImageEditApi({this.requestLogService});
@@ -29,6 +30,25 @@ class ImageEditApi {
       timeoutSeconds: timeoutSeconds,
       requestLogService: requestLogService,
     );
+
+    if (profile.apiMode.isXaiImagine) {
+      // Grok Imagine 的图生图走 JSON 接口并以 data URL 传参考图，
+      // 不使用 OpenAI 的 multipart 表单，也没有流式响应。
+      final referenceDataUrls = <String>[
+        for (final path in request.imagePaths) await imagePathToDataUrl(path),
+      ];
+      final body = buildXaiImagineEditBody(
+        request: request,
+        profile: profile,
+        referenceDataUrls: referenceDataUrls,
+      );
+      final response = await client.postJson(
+        xaiImagineEditsPath,
+        body,
+        cancelToken: cancelToken,
+      );
+      return parseXaiImagineResults(response);
+    }
 
     if (profile.apiMode == ImageGenerationApiMode.responses) {
       final body = buildResponsesImageBody(

@@ -13,6 +13,7 @@ import '../../core/api/prompt_optimization_api.dart';
 import '../../core/models/generation_request.dart';
 import '../../core/models/image_record.dart';
 import '../../core/models/settings_model.dart';
+import '../../core/models/xai_imagine_params.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/services/attachment_picker_service.dart';
@@ -230,6 +231,12 @@ class BottomInputBarState extends ConsumerState<BottomInputBar> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final activeProfile = settings.activeProfile;
+    // Grok Imagine 只接受宽高比加分辨率，且没有输出格式与高清档。
+    final xaiImagine = activeProfile.apiMode.isXaiImagine;
+    final effectiveQuality =
+        xaiImagine && !xaiImagineQualityOptions.contains(_quality)
+        ? ImageQuality.auto
+        : _quality;
     final hasApiKey = activeProfile.apiKey.trim().isNotEmpty;
     final otherProfiles = settings.profiles
         .where((profile) => profile.id != settings.activeProfileId)
@@ -408,6 +415,7 @@ class BottomInputBarState extends ConsumerState<BottomInputBar> {
                                   SizeSelector(
                                     currentWidth: _customWidth,
                                     currentHeight: _customHeight,
+                                    xaiImagine: xaiImagine,
                                     onSizeSelected: (width, height) {
                                       setState(() {
                                         _sizePreset = _matchingSizePreset(
@@ -422,7 +430,10 @@ class BottomInputBarState extends ConsumerState<BottomInputBar> {
                                   ),
                                   const SizedBox(width: 6),
                                   QualitySelector(
-                                    selectedQuality: _quality,
+                                    selectedQuality: effectiveQuality,
+                                    qualities: xaiImagine
+                                        ? xaiImagineQualityOptions
+                                        : ImageQuality.values,
                                     onSelected: (quality) {
                                       setState(() {
                                         _quality = quality;
@@ -430,16 +441,19 @@ class BottomInputBarState extends ConsumerState<BottomInputBar> {
                                       _persistLastGenerationOptions();
                                     },
                                   ),
-                                  const SizedBox(width: 6),
-                                  ImageFormatSelector(
-                                    selectedFormat: _outputFormat,
-                                    onSelected: (format) {
-                                      setState(() {
-                                        _outputFormat = format;
-                                      });
-                                      _persistLastGenerationOptions();
-                                    },
-                                  ),
+                                  // Grok Imagine 不能指定输出格式，隐藏该选项。
+                                  if (!xaiImagine) ...[
+                                    const SizedBox(width: 6),
+                                    ImageFormatSelector(
+                                      selectedFormat: _outputFormat,
+                                      onSelected: (format) {
+                                        setState(() {
+                                          _outputFormat = format;
+                                        });
+                                        _persistLastGenerationOptions();
+                                      },
+                                    ),
+                                  ],
                                   const SizedBox(width: 6),
                                   QuantitySelector(
                                     count: _count,

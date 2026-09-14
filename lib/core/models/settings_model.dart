@@ -13,6 +13,12 @@ enum ImageGenerationApiMode {
     'Responses API (/v1/responses)',
     'Responses API',
     'gpt-5.5',
+  ),
+  xaiImagine(
+    'xai_imagine',
+    'xAI Grok Imagine (/v1/images)',
+    'Grok Imagine',
+    'grok-imagine-image-2.0',
   );
 
   const ImageGenerationApiMode(
@@ -27,9 +33,25 @@ enum ImageGenerationApiMode {
   final String shortLabel;
   final String defaultModel;
 
+  /// 该模式对应的默认 Base URL，用于切换模式或新建配置时预填。
+  String get defaultBaseUrl {
+    return switch (this) {
+      ImageGenerationApiMode.images ||
+      ImageGenerationApiMode.responses => 'https://api.openai.com',
+      ImageGenerationApiMode.xaiImagine => 'https://api.x.ai',
+    };
+  }
+
+  /// Grok Imagine 的图像接口没有 SSE 流式响应，因此不支持流式请求。
+  bool get supportsStreaming => this != ImageGenerationApiMode.xaiImagine;
+
+  /// 是否为 xAI Grok Imagine 模式。
+  bool get isXaiImagine => this == ImageGenerationApiMode.xaiImagine;
+
   String get generationPath {
     return switch (this) {
-      ImageGenerationApiMode.images => '/v1/images/generations',
+      ImageGenerationApiMode.images ||
+      ImageGenerationApiMode.xaiImagine => '/v1/images/generations',
       ImageGenerationApiMode.responses => '/v1/responses',
     };
   }
@@ -59,13 +81,13 @@ class ApiProfile {
       const String.fromEnvironment('API_MODE', defaultValue: 'images'),
     );
     const configuredModel = String.fromEnvironment('MODEL');
+    const configuredBaseUrl = String.fromEnvironment('BASE_URL');
     return ApiProfile(
       id: _uuid.v4(),
       name: '默认',
-      baseUrl: const String.fromEnvironment(
-        'BASE_URL',
-        defaultValue: 'https://api.openai.com',
-      ),
+      baseUrl: configuredBaseUrl.isEmpty
+          ? apiMode.defaultBaseUrl
+          : configuredBaseUrl,
       apiKey: const String.fromEnvironment('API_KEY'),
       model: configuredModel.isEmpty ? apiMode.defaultModel : configuredModel,
       apiMode: apiMode,
@@ -100,7 +122,8 @@ class ApiProfile {
 
   String get editEndpoint {
     return switch (apiMode) {
-      ImageGenerationApiMode.images => '$normalizedBaseUrl/v1/images/edits',
+      ImageGenerationApiMode.images ||
+      ImageGenerationApiMode.xaiImagine => '$normalizedBaseUrl/v1/images/edits',
       ImageGenerationApiMode.responses => '$normalizedBaseUrl/v1/responses',
     };
   }

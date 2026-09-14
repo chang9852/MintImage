@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/models/xai_imagine_params.dart';
 import '../../shared/theme.dart';
 
 // --- Data models ---
@@ -12,7 +13,8 @@ enum _PresetCategory {
   web('Web', Icons.monitor_rounded),
   mobile('移动设备', Icons.phone_iphone_rounded),
   print('打印', Icons.description_rounded),
-  artwork('图稿与插画', Icons.brush_rounded);
+  artwork('图稿与插画', Icons.brush_rounded),
+  grokImagine('Grok Imagine', Icons.auto_awesome_rounded);
 
   const _PresetCategory(this.label, this.icon);
   final String label;
@@ -20,11 +22,17 @@ enum _PresetCategory {
 }
 
 class _SizeItem {
-  const _SizeItem(this.name, this.w, this.h, {this.icon});
+  const _SizeItem(this.name, this.w, this.h, {this.icon, this.subtitle});
+
   final String name;
   final int w;
   final int h;
   final IconData? icon;
+
+  /// 副标题，为空字符串时不展示；为 null 时展示像素尺寸。
+  final String? subtitle;
+
+  String get subtitleText => subtitle ?? '$w×$h';
 }
 
 // --- Preset data (all values are multiples of 16, within gpt-image-2 constraints) ---
@@ -126,6 +134,7 @@ Future<(int, int)?> showSizePickerModal(
   BuildContext context, {
   required int currentWidth,
   required int currentHeight,
+  bool xaiImagine = false,
 }) {
   return showModalBottomSheet<(int, int)>(
     context: context,
@@ -134,6 +143,7 @@ Future<(int, int)?> showSizePickerModal(
     builder: (_) => _SizePickerSheet(
       currentWidth: currentWidth,
       currentHeight: currentHeight,
+      xaiImagine: xaiImagine,
     ),
   );
 }
@@ -144,10 +154,14 @@ class _SizePickerSheet extends StatefulWidget {
   const _SizePickerSheet({
     required this.currentWidth,
     required this.currentHeight,
+    required this.xaiImagine,
   });
 
   final int currentWidth;
   final int currentHeight;
+
+  /// Grok Imagine 模式：只提供宽高比加分辨率档位，不允许自定义像素尺寸。
+  final bool xaiImagine;
 
   @override
   State<_SizePickerSheet> createState() => _SizePickerSheetState();
@@ -169,15 +183,46 @@ class _SizePickerSheetState extends State<_SizePickerSheet> {
     _hCtrl = TextEditingController(
       text: widget.currentHeight > 0 ? widget.currentHeight.toString() : '1024',
     );
+    _category = _visibleCategories.first;
     _inferFromCurrent();
   }
+
+  /// 当前模式下可选的比例分组。
+  List<_PresetCategory> get _visibleCategories {
+    if (widget.xaiImagine) {
+      return const [_PresetCategory.grokImagine];
+    }
+    return _PresetCategory.values
+        .where((category) => category != _PresetCategory.grokImagine)
+        .toList();
+  }
+
+  /// 取某个分组下的尺寸项。
+  ///
+  /// Grok Imagine 的选项由宽高比与分辨率实时换算得出，不放在静态预设表中。
+  List<_SizeItem> _itemsFor(_PresetCategory category) {
+    if (category == _PresetCategory.grokImagine) {
+      return [
+        for (final option in xaiImagineSizeOptions)
+          _SizeItem(
+            option.label,
+            option.width,
+            option.height,
+            // 名称已包含宽高比与分辨率，无需再展示像素值。
+            subtitle: '',
+          ),
+      ];
+    }
+    return _presetData[category]!;
+  }
+
   void _inferFromCurrent() {
     if (widget.currentWidth == 0 || widget.currentHeight == 0) {
       _mode = _Mode.auto;
       return;
     }
-    for (final cat in _PresetCategory.values) {
-      for (final item in _presetData[cat]!) {
+    for (final cat in _visibleCategories) {
+      for (final item in _itemsFor(cat)) {
         if (item.w == widget.currentWidth && item.h == widget.currentHeight) {
           _mode = _Mode.preset;
           _category = cat;
@@ -185,6 +230,13 @@ class _SizePickerSheetState extends State<_SizePickerSheet> {
           return;
         }
       }
+    }
+    // Grok Imagine 不支持自定义像素尺寸，未命中预设时回落到第一项。
+    if (widget.xaiImagine) {
+      _mode = _Mode.preset;
+      _category = _PresetCategory.grokImagine;
+      _selectedItem = _itemsFor(_PresetCategory.grokImagine).first;
+      return;
     }
     _mode = _Mode.custom;
   }
@@ -267,7 +319,7 @@ class _SizePickerSheetState extends State<_SizePickerSheet> {
     return Row(
       children: [
         Text(
-          '设置图像尺寸',
+          widget.xaiImagine ? '设置宽高比与分辨率' : '设置图像尺寸',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
           ),
@@ -280,7 +332,11 @@ class _SizePickerSheetState extends State<_SizePickerSheet> {
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
-            size.$1 == 0 ? '自动' : '${size.$1}×${size.$2}',
+            size.$1 == 0
+                ? '自动'
+                : widget.xaiImagine
+                ? xaiImagineSizeLabel(size.$1, size.$2)
+                : '${size.$1}×${size.$2}',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: AppThemeTokens.primary,
               fontWeight: FontWeight.w700,
@@ -306,9 +362,11 @@ class _SizePickerSheetState extends State<_SizePickerSheet> {
           _tabButton('预设', _mode == _Mode.preset, () {
             setState(() => _mode = _Mode.preset);
           }),
-          _tabButton('自定义', _mode == _Mode.custom, () {
-            setState(() => _mode = _Mode.custom);
-          }),
+          // Grok Imagine 只接受宽高比与分辨率，不支持任意像素尺寸。
+          if (!widget.xaiImagine)
+            _tabButton('自定义', _mode == _Mode.custom, () {
+              setState(() => _mode = _Mode.custom);
+            }),
         ],
       ),
     );
@@ -348,14 +406,17 @@ class _SizePickerSheetState extends State<_SizePickerSheet> {
           Icon(Icons.auto_awesome_rounded, size: 40, color: AppThemeTokens.primary.withValues(alpha: 0.6)),
           const SizedBox(height: 12),
           Text(
-            '由模型自动决定尺寸',
+            widget.xaiImagine ? '由模型自动决定画幅' : '由模型自动决定尺寸',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            '不传递尺寸参数，由模型根据内容自行选择',
+            widget.xaiImagine
+                ? '宽高比传 auto，由模型按内容自行选择，分辨率固定 1K'
+                : '不传递尺寸参数，由模型根据内容自行选择',
+            textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AppThemeTokens.textSecondary,
             ),
@@ -366,33 +427,37 @@ class _SizePickerSheetState extends State<_SizePickerSheet> {
   }
 
   Widget _buildPresetContent() {
-    final items = _presetData[_category]!;
+    final items = _itemsFor(_category);
+    final categories = _visibleCategories;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          height: 36,
-          child: ScrollConfiguration(
-            behavior: ScrollConfiguration.of(context).copyWith(
-              dragDevices: {
-                PointerDeviceKind.touch,
-                PointerDeviceKind.mouse,
-                PointerDeviceKind.trackpad,
-              },
-            ),
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _PresetCategory.values.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final cat = _PresetCategory.values[index];
-                final active = _category == cat;
-                return _categoryChip(cat, active);
-              },
+        // 只有一个分组时不必展示切换条。
+        if (categories.length > 1) ...[
+          SizedBox(
+            height: 36,
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(
+                dragDevices: {
+                  PointerDeviceKind.touch,
+                  PointerDeviceKind.mouse,
+                  PointerDeviceKind.trackpad,
+                },
+              ),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: categories.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final cat = categories[index];
+                  final active = _category == cat;
+                  return _categoryChip(cat, active);
+                },
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
+          const SizedBox(height: 12),
+        ],
         LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
@@ -502,7 +567,7 @@ class _SizePickerSheetState extends State<_SizePickerSheet> {
               ),
             ),
             Text(
-              '${item.w}×${item.h}',
+              item.subtitleText,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: AppThemeTokens.textSecondary,
                 fontSize: 10,

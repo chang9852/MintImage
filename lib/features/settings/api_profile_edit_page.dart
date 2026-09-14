@@ -43,9 +43,10 @@ class _ApiProfileEditPageState extends ConsumerState<ApiProfileEditPage> {
         profile?.name ?? '配置 ${settings.profiles.length + 1}';
     _apiMode = profile?.apiMode ?? ImageGenerationApiMode.images;
     _useStreaming = profile?.useStreaming ?? false;
-    _baseUrlController.text = profile?.baseUrl ?? 'https://api.openai.com';
+    _baseUrlController.text = profile?.baseUrl ?? _apiMode.defaultBaseUrl;
     _apiKeyController.text = profile?.apiKey ?? '';
     _modelController.text = profile?.model ?? _apiMode.defaultModel;
+    _modelOptions = _defaultModelOptionsFor(_apiMode);
 
     _nameController.addListener(_refresh);
     _baseUrlController.addListener(_refresh);
@@ -184,20 +185,37 @@ class _ApiProfileEditPageState extends ConsumerState<ApiProfileEditPage> {
                               model == previousMode.defaultModel) {
                             _modelController.text = mode.defaultModel;
                           }
-                          _modelOptions = const [];
+                          // Base URL 仍是上一个模式的默认值时跟随模式切换。
+                          final baseUrl = _baseUrlController.text.trim();
+                          if (baseUrl.isEmpty ||
+                              baseUrl == previousMode.defaultBaseUrl) {
+                            _baseUrlController.text = mode.defaultBaseUrl;
+                          }
+                          _modelOptions = _defaultModelOptionsFor(mode);
                         });
                       },
                     ),
                     const SizedBox(height: 4),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('流式请求'),
-                      subtitle: const Text(
-                        '启用后发送 stream: true，可降低超时风险',
+                    if (_apiMode.supportsStreaming)
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('流式请求'),
+                        subtitle: const Text(
+                          '启用后发送 stream: true，可降低超时风险',
+                        ),
+                        value: _useStreaming,
+                        onChanged: (v) => setState(() => _useStreaming = v),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'Grok Imagine 没有流式响应，该模式固定使用普通请求。',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppThemeTokens.textSecondary,
+                          ),
+                        ),
                       ),
-                      value: _useStreaming,
-                      onChanged: (v) => setState(() => _useStreaming = v),
-                    ),
                     const SizedBox(height: 14),
                     ModelNameField(
                       controller: _modelController,
@@ -230,6 +248,8 @@ class _ApiProfileEditPageState extends ConsumerState<ApiProfileEditPage> {
 
     final notifier = ref.read(settingsProvider.notifier);
     final existing = _editingProfile;
+    // 不支持流式的模式即便历史配置里开着流式，也要落库为关闭。
+    final useStreaming = _apiMode.supportsStreaming && _useStreaming;
 
     if (existing == null) {
       final created = await notifier.addProfile(
@@ -238,7 +258,7 @@ class _ApiProfileEditPageState extends ConsumerState<ApiProfileEditPage> {
         apiKey: _apiKeyController.text.trim(),
         model: _modelController.text.trim(),
         apiMode: _apiMode,
-        useStreaming: _useStreaming,
+        useStreaming: useStreaming,
       );
       await notifier.setActiveProfile(created.id);
     } else {
@@ -249,7 +269,7 @@ class _ApiProfileEditPageState extends ConsumerState<ApiProfileEditPage> {
           apiKey: _apiKeyController.text.trim(),
           model: _modelController.text.trim(),
           apiMode: _apiMode,
-          useStreaming: _useStreaming,
+          useStreaming: useStreaming,
         ),
       );
     }
@@ -258,6 +278,21 @@ class _ApiProfileEditPageState extends ConsumerState<ApiProfileEditPage> {
       return;
     }
     Navigator.of(context).pop();
+  }
+
+  /// 按生图 API 给出默认模型候选。
+  ///
+  /// Grok Imagine 的模型数量少，且 `/v1/models` 不一定返回图像模型，
+  /// 这里内置候选项，保证不联网也能直接选择。
+  List<String> _defaultModelOptionsFor(ImageGenerationApiMode mode) {
+    if (mode.isXaiImagine) {
+      return const <String>[
+        'grok-imagine-image-2.0',
+        'grok-imagine-image-quality',
+        'grok-imagine-image',
+      ];
+    }
+    return const <String>[];
   }
 
   Future<void> _fetchModels() async {

@@ -8,10 +8,16 @@ class QualitySelector extends StatelessWidget {
     super.key,
     required this.selectedQuality,
     required this.onSelected,
+    this.qualities = ImageQuality.values,
   });
 
   final ImageQuality selectedQuality;
   final ValueChanged<ImageQuality> onSelected;
+
+  /// 可供选择的档位，用于按模型能力收窄选项。
+  ///
+  /// 例如 Grok Imagine 只有低/中两档，不提供高清。
+  final List<ImageQuality> qualities;
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +66,7 @@ class QualitySelector extends StatelessWidget {
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: ImageQuality.values.map((q) {
+            children: qualities.map((q) {
               final active = q == selectedQuality;
               return ListTile(
                 leading: Icon(

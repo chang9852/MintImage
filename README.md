@@ -29,6 +29,7 @@
 - **收藏夹** — 把满意的结果分类整理，随时回看
 - **历史记录** — 所有生成结果本地保存，离线可查
 - **多配置切换** — 同时管理多个 API 地址与密钥，一键切换
+- **多生图协议** — 除 OpenAI 的 Images / Responses 外，额外支持 xAI Grok Imagine
 
 ## 📸 截图
 
@@ -47,6 +48,25 @@
 3. 填写 API 地址、密钥和模型名
 4. 回到主页，输入提示词，开始生成
 
+## 🤖 Grok Imagine 接入
+
+在设置页新增配置时，把「生图 API」选为 `xAI Grok Imagine (/v1/images)`，
+Base URL 会预填 `https://api.x.ai`，模型名默认 `grok-imagine-image-2.0`。
+
+| 项目 | 取值 |
+| --- | --- |
+| 文生图端点 | `POST /v1/images/generations` |
+| 图生图端点 | `POST /v1/images/edits` |
+| 推荐模型 | `grok-imagine-image-2.0`（旗舰，支持 `quality`）；`grok-imagine-image-quality`、`grok-imagine-image`（更早的档位） |
+| 宽高比 | `1:1` `16:9` `9:16` `4:3` `3:4` `3:2` `2:3` `2:1` `1:2` `19.5:9` `9:19.5` `20:9` `9:20`，或 `auto` |
+| 分辨率 | `1K` / `2K` |
+| 质量 | `低` / `中`（仅 2.0 支持下发；没有高清档） |
+| 参考图 | 最多 3 张，单张走 `image`，多张走 `images` |
+
+与 OpenAI 协议不同，Grok Imagine 不接受任意像素尺寸、输出格式和流式请求，
+因此选择该协议后，界面会只保留宽高比与分辨率选项，并隐藏输出格式与流式开关。
+4K 预设会被收敛到 2K，输出图片的落盘扩展名按服务端返回的真实图片格式推断。
+
 ## 📦 自行构建
 
 ```bash
@@ -54,6 +74,10 @@ flutter pub get
 flutter run            # 调试运行
 flutter build windows  # 或 macos / apk
 ```
+
+推送 `v*` 形式的标签会触发 GitHub Actions 构建 Windows / macOS / Android 安装包并发布 Release。
+未配置 `ANDROID_KEYSTORE_BASE64` 等签名密钥时（例如 fork 仓库），Android 会跳过签名步骤，
+仍产出可安装的 APK。
 
 ---
 

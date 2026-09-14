@@ -214,7 +214,10 @@ class GenerationController extends StateNotifier<GenerationState> {
       final storedImage = await storage.storeResult(
         record.id,
         result,
-        fileExtension: request.outputFormat.fileExtension,
+        // 接口能指定输出格式时用用户选择的格式；Grok Imagine 无法指定，
+        // 由 API 层按图片头字节推断出真实格式。
+        fileExtension:
+            result.fileExtension ?? request.outputFormat.fileExtension,
       );
       stopwatch.stop();
 

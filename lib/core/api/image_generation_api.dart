@@ -6,6 +6,7 @@ import '../models/settings_model.dart';
 import '../services/request_log_service.dart';
 import 'openai_client.dart';
 import 'responses_image_api.dart';
+import 'xai_imagine_api.dart';
 
 class ImageGenerationApi {
   const ImageGenerationApi({this.requestLogService});
@@ -24,6 +25,21 @@ class ImageGenerationApi {
       timeoutSeconds: timeoutSeconds,
       requestLogService: requestLogService,
     );
+
+    if (profile.apiMode.isXaiImagine) {
+      // Grok Imagine 接受宽高比加分辨率，不接受像素尺寸、质量与输出格式，
+      // 也没有流式响应，因此这里单独构造请求体。
+      final body = buildXaiImagineGenerateBody(
+        request: request,
+        profile: profile,
+      );
+      final response = await client.postJson(
+        xaiImagineGenerationsPath,
+        body,
+        cancelToken: cancelToken,
+      );
+      return parseXaiImagineResults(response);
+    }
 
     if (profile.apiMode == ImageGenerationApiMode.responses) {
       final body = buildResponsesImageBody(
