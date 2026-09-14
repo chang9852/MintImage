@@ -165,6 +165,27 @@ void main() {
     });
   });
 
+  group('resolveRequestTimeoutSeconds', () {
+    test('Grok 模型至少使用 1200 秒下限', () {
+      // Grok 每次生成都会先跑提示词重写模型，600 秒常常不够。
+      expect(
+        resolveRequestTimeoutSeconds(600, 'grok-imagine-image-2.0'),
+        grokImagineMinRequestTimeoutSeconds,
+      );
+    });
+
+    test('设置里的超时更大时沿用更大的值', () {
+      expect(
+        resolveRequestTimeoutSeconds(1800, 'grok-imagine-image-2.0'),
+        1800,
+      );
+    });
+
+    test('其他模型沿用设置里的超时', () {
+      expect(resolveRequestTimeoutSeconds(600, 'gpt-image-2'), 600);
+    });
+  });
+
   group('resolveImageQualityValue', () {
     test('非 Grok 模型沿用应用内的三档取值', () {
       expect(

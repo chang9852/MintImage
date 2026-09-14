@@ -233,6 +233,26 @@ String? xaiImagineRelaySizeFor(int width, int height) {
   return closest;
 }
 
+/// Grok Imagine 单次请求的最小超时时间（秒）。
+///
+/// 该系列每次生成都会先经过一遍提示词重写模型，提示词越长耗时越久，
+/// 实测常常需要数分钟。即便设置里的超时更短，也按这个下限执行，
+/// 避免把仍在生成中的请求提前中断。
+const int grokImagineMinRequestTimeoutSeconds = 1200;
+
+/// 计算模型实际使用的请求超时（秒）。
+///
+/// 只有 Grok 系列会被抬到 [grokImagineMinRequestTimeoutSeconds] 下限，
+/// 其余模型沿用设置里的取值。
+int resolveRequestTimeoutSeconds(int configuredSeconds, String model) {
+  if (!isXaiImagineModelId(model)) {
+    return configuredSeconds;
+  }
+  return configuredSeconds < grokImagineMinRequestTimeoutSeconds
+      ? grokImagineMinRequestTimeoutSeconds
+      : configuredSeconds;
+}
+
 /// 判断模型名是否属于 xAI Grok 图像模型。
 ///
 /// 模型名以 `grok` 开头即视为 Grok 系列，这样后续新增

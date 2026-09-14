@@ -10,6 +10,7 @@ import '../models/generation_request.dart';
 import '../models/generation_result.dart';
 import '../models/image_record.dart';
 import '../models/settings_model.dart';
+import '../models/xai_imagine_params.dart';
 import 'app_providers.dart';
 import 'favorite_folders_provider.dart';
 import 'image_list_provider.dart';
@@ -89,6 +90,13 @@ class GenerationController extends StateNotifier<GenerationState> {
       },
     );
 
+    // Grok Imagine 每次生成都会先跑一遍提示词重写模型，实测常需数分钟，
+    // 因此按更高的下限执行超时，避免请求被提前中断。
+    final timeoutSeconds = resolveRequestTimeoutSeconds(
+      settings.requestTimeoutSeconds,
+      profile.model,
+    );
+
     for (final record in records) {
       unawaited(
         _executeSingle(
@@ -96,7 +104,7 @@ class GenerationController extends StateNotifier<GenerationState> {
           request: request,
           profile: profile,
           responseFormat: settings.responseFormat,
-          timeoutSeconds: settings.requestTimeoutSeconds,
+          timeoutSeconds: timeoutSeconds,
         ),
       );
     }
