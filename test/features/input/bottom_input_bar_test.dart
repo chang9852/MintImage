@@ -208,6 +208,39 @@ void main() {
     );
     expect(container.read(settingsProvider).activeProfileId, 'api-2');
   });
+
+  testWidgets('生图模型面板按协议分组，切换后两套选择互不影响', (tester) async {
+    await _pumpInputBar(tester, settings: _settingsWithImageAndGrokProfiles);
+
+    // 当前使用 Image 配置，模型按钮展示其模型名。
+    expect(
+      tester.widget<Text>(find.byKey(const Key('image-model-chip-label'))).data,
+      'gpt-image-2',
+    );
+
+    await tester.tap(find.byTooltip('切换生图模型'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Image（OpenAI 图像）'), findsOneWidget);
+    expect(find.text('Grok Imagine'), findsOneWidget);
+    expect(find.text('grok-imagine-image-2.0'), findsOneWidget);
+
+    await tester.tap(find.text('grok-imagine-image-2.0'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(BottomInputBar)),
+    );
+    final settings = container.read(settingsProvider);
+    expect(settings.activeProfileId, 'api-grok');
+    expect(settings.activeProfile.model, 'grok-imagine-image-2.0');
+    // Image 配置的模型名保持原样，两个协议的选择互不影响。
+    expect(settings.profileById('api')!.model, 'gpt-image-2');
+    expect(
+      tester.widget<Text>(find.byKey(const Key('image-model-chip-label'))).data,
+      'grok-imagine-image-2.0',
+    );
+  });
 }
 
 Future<void> _pumpInputBar(
@@ -300,6 +333,22 @@ const _apiProfile3 = ApiProfile(
   baseUrl: 'https://api.openai.com',
   apiKey: 'test-key-3',
   model: 'gpt-image-2',
+);
+
+const _xaiProfile = ApiProfile(
+  id: 'api-grok',
+  name: 'Grok',
+  baseUrl: 'https://api.x.ai',
+  apiKey: 'test-key-grok',
+  model: 'grok-imagine-image-2.0',
+  apiMode: ImageGenerationApiMode.xaiImagine,
+);
+
+const _settingsWithImageAndGrokProfiles = SettingsModel(
+  profiles: [_apiProfile, _xaiProfile],
+  activeProfileId: 'api',
+  promptOptimizationProfiles: [_promptOptimizationProfile],
+  activePromptOptimizationProfileId: 'optimizer',
 );
 
 final _webpRecord = ImageRecord(

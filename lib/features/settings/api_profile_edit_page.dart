@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/openai_client.dart';
+import '../../core/models/builtin_image_models.dart';
 import '../../core/models/settings_model.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/settings_provider.dart';
@@ -10,9 +11,15 @@ import '../../shared/theme.dart';
 import 'model_name_field.dart';
 
 class ApiProfileEditPage extends ConsumerStatefulWidget {
-  const ApiProfileEditPage({super.key, this.profile});
+  const ApiProfileEditPage({super.key, this.profile, this.initialApiMode});
 
   final ApiProfile? profile;
+
+  /// 新增配置时预选的生图 API。
+  ///
+  /// 用于从设置页直接新增一份已填好 Base URL 与默认模型的配置，
+  /// 例如 xAI Grok Imagine。
+  final ImageGenerationApiMode? initialApiMode;
 
   @override
   ConsumerState<ApiProfileEditPage> createState() => _ApiProfileEditPageState();
@@ -41,7 +48,10 @@ class _ApiProfileEditPageState extends ConsumerState<ApiProfileEditPage> {
 
     _nameController.text =
         profile?.name ?? '配置 ${settings.profiles.length + 1}';
-    _apiMode = profile?.apiMode ?? ImageGenerationApiMode.images;
+    _apiMode =
+        profile?.apiMode ??
+        widget.initialApiMode ??
+        ImageGenerationApiMode.images;
     _useStreaming = profile?.useStreaming ?? false;
     _baseUrlController.text = profile?.baseUrl ?? _apiMode.defaultBaseUrl;
     _apiKeyController.text = profile?.apiKey ?? '';
@@ -286,11 +296,7 @@ class _ApiProfileEditPageState extends ConsumerState<ApiProfileEditPage> {
   /// 这里内置候选项，保证不联网也能直接选择。
   List<String> _defaultModelOptionsFor(ImageGenerationApiMode mode) {
     if (mode.isXaiImagine) {
-      return const <String>[
-        'grok-imagine-image-2.0',
-        'grok-imagine-image-quality',
-        'grok-imagine-image',
-      ];
+      return xaiImagineModelIds;
     }
     return const <String>[];
   }

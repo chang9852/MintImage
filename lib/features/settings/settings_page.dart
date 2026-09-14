@@ -112,6 +112,17 @@ class SettingsPage extends ConsumerWidget {
               label: '添加生图 API',
               onTap: () => _openImageEditor(context),
             ),
+            const SizedBox(height: 8),
+            // 直接新增一份 xAI Grok Imagine 配置：
+            // Base URL 与模型名已预填，只需补 API Key。
+            _AddConfigButton(
+              icon: Icons.auto_awesome_rounded,
+              label: '添加 Grok Imagine 生图 API',
+              onTap: () => _openImageEditor(
+                context,
+                initialApiMode: ImageGenerationApiMode.xaiImagine,
+              ),
+            ),
             const SizedBox(height: 18),
             const Divider(),
             const SizedBox(height: 14),
@@ -215,10 +226,14 @@ class SettingsPage extends ConsumerWidget {
   Future<void> _openImageEditor(
     BuildContext context, {
     ApiProfile? profile,
+    ImageGenerationApiMode? initialApiMode,
   }) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ApiProfileEditPage(profile: profile),
+        builder: (_) => ApiProfileEditPage(
+          profile: profile,
+          initialApiMode: initialApiMode,
+        ),
       ),
     );
   }

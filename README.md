@@ -30,6 +30,7 @@
 - **历史记录** — 所有生成结果本地保存，离线可查
 - **多配置切换** — 同时管理多个 API 地址与密钥，一键切换
 - **多生图协议** — 除 OpenAI 的 Images / Responses 外，额外支持 xAI Grok Imagine
+- **生图模型选择** — 首页底部可按协议在 Image 与 Grok Imagine 模型之间切换，两套选择各自独立互不影响
 
 ## 📸 截图
 
@@ -50,8 +51,12 @@
 
 ## 🤖 Grok Imagine 接入
 
-在设置页新增配置时，把「生图 API」选为 `xAI Grok Imagine (/v1/images)`，
-Base URL 会预填 `https://api.x.ai`，模型名默认 `grok-imagine-image-2.0`。
+设置页「生图 API」下方有独立的 **添加 Grok Imagine 生图 API** 按钮，
+点击后会直接新建一份配置：生图 API 预选为 `xAI Grok Imagine (/v1/images)`、
+Base URL 预填 `https://api.x.ai`、模型名预填 `grok-imagine-image-2.0`，只需补上 API Key。
+
+它和普通的 Image 配置彼此独立，各自保存自己的模型名、地址与密钥，
+在首页底部的模型按钮里可以随时切换，切换其中一个不会影响另一个。
 
 | 项目 | 取值 |
 | --- | --- |

@@ -24,6 +24,7 @@ import 'image_format_selector.dart';
 import 'quality_selector.dart';
 import 'quantity_selector.dart';
 import 'size_selector.dart';
+import '../settings/api_profile_edit_page.dart';
 import '../settings/prompt_optimization_profile_edit_page.dart';
 
 const double _primaryInputHeight = 40;
@@ -464,6 +465,11 @@ class BottomInputBarState extends ConsumerState<BottomInputBar> {
                                     },
                                   ),
                                   const SizedBox(width: 6),
+                                  _ImageModelSwitchButton(
+                                    model: activeProfile.model,
+                                    onTap: _showImageModelSheet,
+                                  ),
+                                  const SizedBox(width: 6),
                                   _ApiProfileSwitchButton(
                                     activeProfile: activeProfile,
                                     onTap: _showApiProfileSwitchSheet,
@@ -841,6 +847,51 @@ class BottomInputBarState extends ConsumerState<BottomInputBar> {
       return;
     }
     await _submit(apiProfileId: selectedProfileId);
+  }
+
+  /// 打开生图模型选择面板。
+  ///
+  /// 面板按协议把已配置的模型分成 Image 与 Grok Imagine 两组，
+  /// 选中只是切换到对应配置，不会改写任何配置里的模型名，
+  /// 因此两套选择互不影响。
+  Future<void> _showImageModelSheet() async {
+    if (_optimizingPrompt) {
+      return;
+    }
+
+    final settings = ref.read(settingsProvider);
+    unfocusPrompt();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => _ImageModelSheet(
+        profiles: settings.profiles,
+        activeProfileId: settings.activeProfileId,
+        onSelect: (profile) {
+          Navigator.of(ctx).pop();
+          unawaited(
+            ref.read(settingsProvider.notifier).setActiveProfile(profile.id),
+          );
+        },
+        onEditActive: () {
+          Navigator.of(ctx).pop();
+          unawaited(_openProfileEditor(settings.activeProfile));
+        },
+      ),
+    );
+  }
+
+  /// 打开当前配置的编辑页，用于修改模型名、地址与密钥。
+  Future<void> _openProfileEditor(ApiProfile profile) async {
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ApiProfileEditPage(profile: profile),
+      ),
+    );
   }
 
   Future<void> _showApiProfileSwitchSheet() async {
@@ -1385,6 +1436,202 @@ class _SendButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 当前生图模型的展示按钮。
+///
+/// 点击后按协议分组罗列已配置的模型，用于在 Image 与 Grok Imagine 之间切换。
+class _ImageModelSwitchButton extends StatelessWidget {
+  const _ImageModelSwitchButton({required this.model, required this.onTap});
+
+  final String model;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: '切换生图模型',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 130),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 28),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppThemeTokens.surfaceSoft,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppThemeTokens.border.withValues(alpha: 0.7),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.memory_rounded,
+                  size: 13,
+                  color: AppThemeTokens.primaryStrong,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    model.trim().isEmpty ? '模型' : model,
+                    key: const Key('image-model-chip-label'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppThemeTokens.primaryStrong,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 生图模型选择面板。
+///
+/// 按协议把已配置的模型分成 Image 与 Grok Imagine 两组，
+/// 每组的模型名保存在各自的配置里，切换不会互相覆盖。
+class _ImageModelSheet extends StatelessWidget {
+  const _ImageModelSheet({
+    required this.profiles,
+    required this.activeProfileId,
+    required this.onSelect,
+    required this.onEditActive,
+  });
+
+  final List<ApiProfile> profiles;
+  final String activeProfileId;
+  final ValueChanged<ApiProfile> onSelect;
+  final VoidCallback onEditActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageProfiles = profiles
+        .where((profile) => !profile.apiMode.isXaiImagine)
+        .toList();
+    final xaiProfiles = profiles
+        .where((profile) => profile.apiMode.isXaiImagine)
+        .toList();
+
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 6),
+                child: Text(
+                  '选择生图模型',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              _buildSection(
+                context,
+                title: 'Image（OpenAI 图像）',
+                icon: Icons.image_rounded,
+                group: imageProfiles,
+                emptyHint: '还没有图像配置，可在设置页点「添加生图 API」。',
+              ),
+              _buildSection(
+                context,
+                title: 'Grok Imagine',
+                icon: Icons.auto_awesome_rounded,
+                group: xaiProfiles,
+                emptyHint:
+                    '还没有 Grok Imagine 配置，可在设置页点「添加 Grok Imagine 生图 API」。',
+              ),
+              const Divider(height: 10),
+              ListTile(
+                leading: const Icon(Icons.edit_rounded),
+                title: const Text('编辑当前配置'),
+                subtitle: const Text('修改当前配置的模型名、地址与密钥'),
+                onTap: onEditActive,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 渲染一个协议分组；该协议下没有配置时展示引导文案。
+  Widget _buildSection(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required List<ApiProfile> group,
+    required String emptyHint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
+          child: Row(
+            children: [
+              Icon(icon, size: 15, color: AppThemeTokens.primaryStrong),
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppThemeTokens.primaryStrong,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (group.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+            child: Text(
+              emptyHint,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppThemeTokens.textSecondary,
+              ),
+            ),
+          ),
+        for (final profile in group)
+          ListTile(
+            leading: Icon(
+              profile.id == activeProfileId
+                  ? Icons.check_circle_rounded
+                  : Icons.circle_outlined,
+              color: profile.id == activeProfileId
+                  ? AppThemeTokens.primary
+                  : Colors.grey,
+            ),
+            title: Text(
+              profile.model.trim().isEmpty ? '(未填写模型名)' : profile.model,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              '${profile.name} · ${profile.normalizedBaseUrl}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            onTap: () => onSelect(profile),
+          ),
+      ],
     );
   }
 }
