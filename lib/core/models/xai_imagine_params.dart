@@ -196,6 +196,43 @@ bool xaiImagineSupportsQuality(String model) {
   return model.trim().toLowerCase().contains('2.0');
 }
 
+/// 中转站的 Grok 图像渠道接受的固定 `size` 取值及其对应宽高比。
+///
+/// 该渠道只认识这一组尺寸标记，其他像素尺寸会被直接拒绝
+/// （返回「aspect_ratio 不受支持」），因此需要把应用内的任意像素尺寸
+/// 换算到其中最近的取值。
+const Map<String, String> _xaiImagineRelaySizes = <String, String>{
+  '1024x1024': '1:1',
+  '1280x720': '16:9',
+  '720x1280': '9:16',
+  '1536x1024': '3:2',
+  '1024x1536': '2:3',
+};
+
+/// 把像素尺寸换算成中转站接受的 `size` 取值。
+///
+/// 尺寸为自动（宽或高为 0）时返回 null，表示不下发该字段、
+/// 由上游自行决定，避免下发未被接受的取值。
+String? xaiImagineRelaySizeFor(int width, int height) {
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  final target = width / height;
+  String? closest;
+  var closestDistance = double.infinity;
+
+  for (final entry in _xaiImagineRelaySizes.entries) {
+    final distance = (_ratioValue(entry.value) - target).abs();
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closest = entry.key;
+    }
+  }
+
+  return closest;
+}
+
 /// 判断模型名是否属于 xAI Grok 图像模型。
 ///
 /// 模型名以 `grok` 开头即视为 Grok 系列，这样后续新增

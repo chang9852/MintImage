@@ -80,7 +80,17 @@ class ImageGenerationApi {
       if (quality != null) 'quality': quality,
       if (!isXaiModel) 'output_format': request.outputFormat.apiValue,
     };
-    if (request.apiSize != null) {
+    if (isXaiModel) {
+      // 中转站的 Grok 渠道只接受一组固定的尺寸标记，
+      // 其他像素尺寸会被拒绝（返回「aspect_ratio 不受支持」）。
+      final relaySize = xaiImagineRelaySizeFor(
+        request.resolvedWidth,
+        request.resolvedHeight,
+      );
+      if (relaySize != null) {
+        body['size'] = relaySize;
+      }
+    } else if (request.apiSize != null) {
       body['size'] = request.apiSize;
     }
     if (isXaiModel) {

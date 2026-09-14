@@ -142,6 +142,29 @@ void main() {
     });
   });
 
+  group('xaiImagineRelaySizeFor', () {
+    test('把任意像素尺寸换算到中转站接受的取值', () {
+      // 1440x2560 不在中转站的尺寸表里，会报「aspect_ratio 不受支持」，
+      // 必须换算成同为 9:16 的 720x1280。
+      expect(xaiImagineRelaySizeFor(1440, 2560), '720x1280');
+      expect(xaiImagineRelaySizeFor(1024, 1024), '1024x1024');
+      expect(xaiImagineRelaySizeFor(1536, 1024), '1536x1024');
+      expect(xaiImagineRelaySizeFor(1024, 1536), '1024x1536');
+      expect(xaiImagineRelaySizeFor(1920, 1080), '1280x720');
+    });
+
+    test('没有精确比例时取最接近的一档', () {
+      expect(xaiImagineRelaySizeFor(1024, 768), '1536x1024');
+      expect(xaiImagineRelaySizeFor(768, 1024), '1024x1536');
+      expect(xaiImagineRelaySizeFor(2048, 1024), '1280x720');
+    });
+
+    test('自动尺寸返回 null，表示不下发 size', () {
+      expect(xaiImagineRelaySizeFor(0, 0), isNull);
+      expect(xaiImagineRelaySizeFor(1024, 0), isNull);
+    });
+  });
+
   group('resolveImageQualityValue', () {
     test('非 Grok 模型沿用应用内的三档取值', () {
       expect(

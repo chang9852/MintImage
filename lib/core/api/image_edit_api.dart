@@ -126,7 +126,16 @@ class ImageEditApi {
       if (quality != null) MapEntry('quality', quality),
       if (!isXaiModel) MapEntry('output_format', request.outputFormat.apiValue),
     ];
-    if (request.apiSize != null) {
+    if (isXaiModel) {
+      // 中转站的 Grok 渠道只接受一组固定的尺寸标记。
+      final relaySize = xaiImagineRelaySizeFor(
+        request.resolvedWidth,
+        request.resolvedHeight,
+      );
+      if (relaySize != null) {
+        fields.add(MapEntry('size', relaySize));
+      }
+    } else if (request.apiSize != null) {
       fields.add(MapEntry('size', request.apiSize!));
     }
     if (isXaiModel) {

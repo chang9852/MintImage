@@ -381,6 +381,33 @@ void main() {
       expect(body['response_format'], 'url');
     });
 
+    test('任意像素尺寸都换算成中转站接受的取值', () async {
+      // 1440x2560 会被中转站拒绝（「aspect_ratio 不受支持」），
+      // 必须换算成同为 9:16 的 720x1280。
+      final body = await _captureGenerateBody(
+        request: _request(
+          sizePreset: SizePreset.custom,
+          customWidth: 1440,
+          customHeight: 2560,
+        ),
+        model: 'grok-imagine-image-2.0',
+        apiMode: ImageGenerationApiMode.images,
+      );
+
+      expect(body['size'], '720x1280');
+    });
+
+    test('自动尺寸不下发 size', () async {
+      final body = await _captureGenerateBody(
+        request: _request(sizePreset: SizePreset.auto),
+        model: 'grok-imagine-image-2.0',
+        apiMode: ImageGenerationApiMode.images,
+      );
+
+      expect(body.containsKey('size'), isFalse);
+      expect(body['quality'], 'medium');
+    });
+
     test('非 Grok 模型仍按原样发送质量与输出格式', () async {
       final body = await _captureGenerateBody(
         request: _request(quality: ImageQuality.high),
