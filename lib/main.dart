@@ -7,6 +7,7 @@ import 'app.dart';
 import 'core/bootstrap/app_bootstrap.dart';
 import 'core/providers/app_providers.dart';
 import 'core/services/background_generation_service.dart';
+import 'core/services/data_directory_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/request_log_service.dart';
 import 'features/logs/log_viewer_app.dart';
@@ -15,6 +16,7 @@ Future<void> main([List<String> args = const []]) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (args.contains('--log-window')) {
+    await DataDirectoryService.initialize();
     final requestLogService = await RequestLogService.load();
     runApp(
       ProviderScope(
@@ -59,6 +61,10 @@ class _AppStartupShellState extends State<_AppStartupShell> {
   }
 
   Future<_AppStartupData> _load() async {
+    // 数据目录要先解析完成：数据库文件、图片目录与日志路径都由它决定，
+    // 切换数据目录时的搬运也在这一步执行（此时数据库尚未打开）。
+    await DataDirectoryService.initialize();
+
     final bootstrapFuture = AppBootstrap.load();
     final requestLogFuture = RequestLogService.load(reset: true);
 

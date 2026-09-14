@@ -10,6 +10,28 @@ class ImageRecordDao {
 
   final AppDatabase database;
 
+  /// 批量改写生成结果图片的本地路径。
+  ///
+  /// 用于数据目录迁移：图片被复制到新目录后，把记录里的旧路径换成新路径，
+  /// 否则历史记录会指向已经不存在的文件。
+  Future<void> updateResultImagePaths(Map<String, String> replacements) async {
+    if (replacements.isEmpty) {
+      return;
+    }
+
+    await database.transaction(() async {
+      for (final entry in replacements.entries) {
+        await (database.update(database.imageRecordsTable)
+              ..where((table) => table.resultImagePath.equals(entry.key)))
+            .write(
+              ImageRecordsTableCompanion(
+                resultImagePath: Value(entry.value),
+              ),
+            );
+      }
+    });
+  }
+
   Future<List<ImageRecord>> loadAll() async {
     final query = database.select(database.imageRecordsTable)
       ..orderBy([(table) => OrderingTerm.desc(table.createdAt)]);

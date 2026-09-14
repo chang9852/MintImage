@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../models/generation_result.dart';
+import 'data_directory_service.dart';
 
 class StoredImageResult {
   const StoredImageResult({required this.localPath, required this.imageUrl});
@@ -51,9 +51,9 @@ class ImageStorageService {
   }
 
   Future<Directory> _ensureOutputDirectory() async {
-    final directory = await getApplicationDocumentsDirectory();
+    // 生成图片与数据库、日志一起放在数据目录下，跟随用户的目录设置。
     final outputDirectory = Directory(
-      p.join(directory.path, 'generated_images'),
+      DataDirectoryService.imagesDirectoryPath,
     );
     await outputDirectory.create(recursive: true);
     return outputDirectory;

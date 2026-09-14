@@ -14,6 +14,7 @@ import '../../core/providers/favorite_folders_provider.dart';
 import '../../core/providers/image_list_provider.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/services/backup_service.dart';
+import '../../core/services/data_directory_service.dart';
 import '../../core/services/webdav_backup_service.dart';
 import '../../core/version/app_version.dart';
 import '../../shared/theme.dart';
@@ -46,6 +47,11 @@ class SettingsPage extends ConsumerWidget {
             _RequestTimeoutCard(
               timeoutSeconds: settings.requestTimeoutSeconds,
               onEdit: () => _editRequestTimeout(context, ref, settings),
+            ),
+            const SizedBox(height: 12),
+            _DataDirectoryCard(
+              directory: DataDirectoryService.directoryPath,
+              onEdit: () => _editDataDirectory(context),
             ),
             const SizedBox(height: 12),
             _ActionCard(
@@ -323,6 +329,138 @@ class SettingsPage extends ConsumerWidget {
     await ref
         .read(settingsProvider.notifier)
         .setRequestTimeoutSeconds(timeoutSeconds);
+  }
+
+  /// 修改数据目录：校验可用后写入指针文件，重启应用后生效。
+  ///
+  /// 返回值约定：null 表示取消，空字符串表示恢复默认目录，其余为所选路径。
+  Future<void> _editDataDirectory(BuildContext context) async {
+    final currentDirectory = DataDirectoryService.directoryPath;
+    final defaultPath = await DataDirectoryService.defaultDirectoryPath();
+    if (!context.mounted) {
+      return;
+    }
+
+    final controller = TextEditingController(text: currentDirectory);
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        String? errorText;
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            Future<void> pickDirectory() async {
+              final picked = await FilePicker.getDirectoryPath(
+                dialogTitle: '选择数据目录',
+              );
+              if (picked == null || picked.trim().isEmpty) {
+                return;
+              }
+              setState(() {
+                controller.text = picked;
+                errorText = null;
+              });
+            }
+
+            return AlertDialog(
+              title: const Text('数据目录'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: controller,
+                      decoration: InputDecoration(
+                        labelText: '目录路径',
+                        errorText: errorText,
+                        suffixIcon: IconButton(
+                          tooltip: '选择目录',
+                          onPressed: pickDirectory,
+                          icon: const Icon(Icons.folder_open_rounded),
+                        ),
+                      ),
+                      onChanged: (_) {
+                        if (errorText != null) {
+                          setState(() => errorText = null);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '目录下会自动创建 images、database、logs 三个文件夹，'
+                      '分别存放生成图片、数据库和请求日志。\n'
+                      '修改后需要重启应用；下次启动时会把现有数据复制到新目录，'
+                      '原目录的数据仍会保留。',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '默认目录：$defaultPath',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppThemeTokens.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(''),
+                  child: const Text('恢复默认'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final path = controller.text.trim();
+                    if (path.isEmpty) {
+                      setState(() {
+                        errorText = '请输入目录路径';
+                      });
+                      return;
+                    }
+                    if (!await DataDirectoryService.isUsable(path)) {
+                      setState(() {
+                        errorText = '该目录无法写入，请换一个位置';
+                      });
+                      return;
+                    }
+                    if (!context.mounted) {
+                      return;
+                    }
+                    Navigator.of(context).pop(path);
+                  },
+                  child: const Text('保存'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (selected == null) {
+      return;
+    }
+
+    await DataDirectoryService.switchTo(selected.isEmpty ? null : selected);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          selected.isEmpty
+              ? '已恢复默认数据目录，重启应用后生效。'
+              : '已保存数据目录，重启应用后生效。',
+        ),
+      ),
+    );
   }
 
   Future<void> _exportBackupToFile(
@@ -1545,6 +1683,59 @@ class _RequestTimeoutCard extends StatelessWidget {
               ],
             ),
           ),
+          FilledButton.tonal(onPressed: onEdit, child: const Text('修改')),
+        ],
+      ),
+    );
+  }
+}
+
+class _DataDirectoryCard extends StatelessWidget {
+  const _DataDirectoryCard({required this.directory, required this.onEdit});
+
+  final String directory;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: AppDecorations.card(radius: 22),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppThemeTokens.surfaceSoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.folder_outlined, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '数据目录',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  directory,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppThemeTokens.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
           FilledButton.tonal(onPressed: onEdit, child: const Text('修改')),
         ],
       ),

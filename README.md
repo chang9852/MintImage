@@ -31,6 +31,8 @@
 - **多配置切换** — 同时管理多个 API 地址与密钥，一键切换
 - **多生图协议** — 除 OpenAI 的 Images / Responses 外，额外支持 xAI Grok Imagine
 - **生图模型选择** — 首页底部可按协议在 Image 与 Grok Imagine 模型之间切换，两套选择各自独立互不影响
+- **数据目录可迁移** — 图片、数据库、日志集中在一个目录，可改到 D 盘等位置
+- **Windows 安装向导** — 可选安装位置，带开始菜单与桌面快捷方式
 
 ## 📸 截图
 
@@ -104,6 +106,28 @@ Grok Imagine 的每次生成都会**先经过一遍提示词重写模型**（官
 因此选择该协议后，界面会只保留宽高比与分辨率选项，并隐藏输出格式与流式开关。
 4K 预设会被收敛到 2K，输出图片的落盘扩展名按服务端返回的真实图片格式推断。
 
+## 📂 数据目录
+
+所有本地数据集中放在一个数据目录下，里面固定分成三个文件夹：
+
+```
+<数据目录>/
+├── images/     生成结果图片
+├── database/   SQLite 数据库（历史记录、收藏夹）
+└── logs/       请求日志
+```
+
+默认数据目录是系统的应用数据目录（Windows 上是
+`%APPDATA%\com.aiqin\MintImage`）。如果系统盘空间紧张，可以在
+**设置页 → 数据目录** 改成 D 盘等任意位置：
+
+- 目录下会自动创建上面三个文件夹，路径必须可写。
+- 修改后**需要重启应用**；下次启动时会把现有数据复制到新目录，
+  原有数据仍会保留在原处，确认无误后可自行清理。
+- 历史版本把图片放在「文档/generated_images」、数据库与日志放在数据目录根下，
+  升级后会自动归位到 `images/`、`database/`、`logs/`，历史记录不会丢失。
+- 卸载程序不会删除数据目录。
+
 ## 📦 自行构建
 
 ```bash
@@ -112,9 +136,19 @@ flutter run            # 调试运行
 flutter build windows  # 或 macos / apk
 ```
 
-推送 `v*` 形式的标签会触发 GitHub Actions 构建 Windows / macOS / Android 安装包并发布 Release。
-未配置 `ANDROID_KEYSTORE_BASE64` 等签名密钥时（例如 fork 仓库），Android 会跳过签名步骤，
-仍产出可安装的 APK。
+推送 `v*` 形式的标签会触发 GitHub Actions 构建并发布 Release，产物包括：
+
+| 产物 | 说明 |
+| --- | --- |
+| `MintImage-Setup-x.y.z.exe` | Windows 安装向导，**可选择安装位置**，带开始菜单与桌面快捷方式 |
+| `MintImage-windows-x64.zip` | Windows 免安装版 |
+| `MintImage-macos-arm64.zip` | macOS 应用 |
+| `app-release.apk` | Android 安装包 |
+
+安装包由 [Inno Setup](https://jrsoftware.org/isinfo.php) 编译
+（脚本见 `installer/mint_image.iss`，GitHub 的 Windows 运行器已预装）。
+未配置 `ANDROID_KEYSTORE_BASE64` 等签名密钥时（例如 fork 仓库），
+Android 会跳过签名步骤，仍产出可安装的 APK。
 
 ---
 

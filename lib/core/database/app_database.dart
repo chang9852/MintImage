@@ -2,13 +2,10 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+
+import '../services/data_directory_service.dart';
 
 part 'app_database.g.dart';
-
-const _databaseFileName = 'mint_image.sqlite';
-const _legacyDatabaseFileName = 'gpt_image_flutter.sqlite';
 
 class ImageRecordsTable extends Table {
   TextColumn get id => text()();
@@ -87,31 +84,13 @@ class FavoriteFolderItemsTable extends Table {
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
-    final directory = await getApplicationSupportDirectory();
-    await directory.create(recursive: true);
-    final file = File(p.join(directory.path, _databaseFileName));
-    await _copyLegacyDatabaseIfNeeded(directory, file);
+    // 数据库固定在数据目录的 database 子目录下；
+    // 历史版本遗留在数据目录根下的数据库文件，已由 DataDirectoryService
+    // 在启动阶段搬进该子目录。
+    final file = File(DataDirectoryService.databaseFilePath);
+    await file.parent.create(recursive: true);
     return NativeDatabase.createInBackground(file);
   });
-}
-
-Future<void> _copyLegacyDatabaseIfNeeded(Directory directory, File file) async {
-  if (await file.exists()) {
-    return;
-  }
-
-  final legacyFile = File(p.join(directory.path, _legacyDatabaseFileName));
-  if (!await legacyFile.exists()) {
-    return;
-  }
-
-  await legacyFile.copy(file.path);
-  for (final suffix in ['-wal', '-shm']) {
-    final legacySidecar = File('${legacyFile.path}$suffix');
-    if (await legacySidecar.exists()) {
-      await legacySidecar.copy('${file.path}$suffix');
-    }
-  }
 }
 
 @DriftDatabase(

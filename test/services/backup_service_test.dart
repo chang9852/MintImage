@@ -10,6 +10,7 @@ import 'package:mint_image/core/models/generation_request.dart';
 import 'package:mint_image/core/models/image_record.dart';
 import 'package:mint_image/core/models/settings_model.dart';
 import 'package:mint_image/core/services/backup_service.dart';
+import 'package:mint_image/core/services/data_directory_service.dart';
 import 'package:mint_image/core/services/request_log_service.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -22,6 +23,8 @@ void main() {
     root = await Directory.systemTemp.createTemp('mint_image_backup_test_');
     previousPathProvider = PathProviderPlatform.instance;
     PathProviderPlatform.instance = _FakePathProvider(root);
+    // 数据库、图片与日志都落在数据目录下，先用假的 path_provider 解析出来。
+    await DataDirectoryService.initialize();
   });
 
   tearDown(() async {

@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../database/app_database.dart';
 import '../database/favorite_folder_dao.dart';
@@ -14,6 +13,7 @@ import '../models/generation_request.dart';
 import '../models/image_record.dart';
 import '../models/settings_model.dart';
 import '../version/app_version.dart';
+import 'data_directory_service.dart';
 import 'request_log_service.dart';
 
 const _backupFormat = 'mint_image_backup';
@@ -345,16 +345,27 @@ class BackupService {
   }
 
   Future<File> _generatedImageDestination(String archivePath) async {
-    final directory = await getApplicationDocumentsDirectory();
+    // 恢复的图片写回数据目录的 images/，与正常生成的图片放在一起。
     return File(
-      p.join(directory.path, 'generated_images', p.basename(archivePath)),
+      p.join(DataDirectoryService.imagesDirectoryPath, p.basename(archivePath)),
     );
   }
 
+  /// 恢复的参考图暂存目录。
+  ///
+  /// 放在 images/ 之下，使数据目录顶层保持 images、database、logs 三个文件夹。
+  String get _restoredAttachmentDirectoryPath => p.join(
+    DataDirectoryService.imagesDirectoryPath,
+    'restored_source_attachments',
+  );
+
   Future<void> _prepareRestoreFileDirectories() async {
-    final directory = await getApplicationDocumentsDirectory();
-    for (final name in ['generated_images', 'restored_source_attachments']) {
-      final target = Directory(p.join(directory.path, name));
+    // 恢复会整份替换数据，这里先清掉旧的图片与参考图，避免残留。
+    for (final path in [
+      DataDirectoryService.imagesDirectoryPath,
+      _restoredAttachmentDirectoryPath,
+    ]) {
+      final target = Directory(path);
       if (await target.exists()) {
         await target.delete(recursive: true);
       }
@@ -365,11 +376,9 @@ class BackupService {
     String recordId,
     String archivePath,
   ) async {
-    final directory = await getApplicationDocumentsDirectory();
     return File(
       p.join(
-        directory.path,
-        'restored_source_attachments',
+        _restoredAttachmentDirectoryPath,
         _safeFileStem(recordId),
         p.basename(archivePath),
       ),

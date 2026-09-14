@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+
+import 'data_directory_service.dart';
 
 enum RequestLogLevel { info, request, response, error }
 
@@ -47,7 +47,6 @@ class RequestLogService extends ChangeNotifier {
   RequestLogService._(this._file);
 
   static const int _maxEntries = 1000;
-  static const String _fileName = 'mint_image_request_logs.jsonl';
 
   final File _file;
   final List<RequestLogEntry> _entries = <RequestLogEntry>[];
@@ -58,12 +57,11 @@ class RequestLogService extends ChangeNotifier {
   String get filePath => _file.path;
 
   static Future<RequestLogService> load({bool reset = false}) async {
-    final directory = await getApplicationSupportDirectory();
-    await directory.create(recursive: true);
+    // 日志与数据库、图片一起放在数据目录下，跟随用户的目录设置。
+    final file = File(DataDirectoryService.requestLogFilePath);
+    await file.parent.create(recursive: true);
 
-    final service = RequestLogService._(
-      File(p.join(directory.path, _fileName)),
-    );
+    final service = RequestLogService._(file);
     if (reset) {
       await service.clear();
       return service;

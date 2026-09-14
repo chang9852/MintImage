@@ -35,10 +35,25 @@ jobs:
           cd build/windows/x64/runner/Release
           7z a -tzip ../../../../../MintImage-windows-x64.zip .
 
+      # 由 Inno Setup 生成可自定义安装位置的 Setup.exe。
+      # windows-2022 运行器已预装 Inno Setup 6，无需额外安装。
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $env:MINTIMAGE_VERSION = $env:BUILD_NAME
+          $env:MINTIMAGE_RELEASE_DIR = "${{ github.workspace }}\build\windows\x64\runner\Release"
+          $env:MINTIMAGE_OUTPUT_DIR = "${{ github.workspace }}"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\mint_image.iss"
+
       - uses: actions/upload-artifact@v6
         with:
           name: windows-x64
           path: MintImage-windows-x64.zip
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: windows-installer
+          path: MintImage-Setup-*.exe
 
   build-android:
     runs-on: ubuntu-latest
@@ -154,6 +169,7 @@ jobs:
         with:
           generate_release_notes: true
           files: |
+            MintImage-Setup-*.exe
             MintImage-windows-x64.zip
             app-release.apk
             MintImage-macos-arm64.zip
